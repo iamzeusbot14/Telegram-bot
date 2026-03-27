@@ -1,0 +1,53 @@
+name: Daily IST Motivation Bot
+
+on:
+  schedule:
+    # 02:30 UTC is 08:00 AM IST (Kolkata)
+    - cron: '30 2 * * *'
+  workflow_dispatch: # Allows manual trigger for testing
+
+jobs:
+  send_quote:
+    runs-on: ubuntu-latest
+    env:
+      TZ: 'Asia/Kolkata'
+    steps:
+      - name: Fetch Quote and Send
+        run: |
+          # 1. Fetch a random inspirational quote with a 10s timeout
+          QUOTE_DATA=$(curl -s --max-time 10 https://api.quotable.io/random?tags=inspirational)
+          
+          # Check if API returned data, otherwise use fallback
+          if [ -z "$QUOTE_DATA" ] || [ "$QUOTE_DATA" == "null" ]; then
+            CONTENT="The only way to do great work is to love what you do."
+            AUTHOR="Steve Jobs"
+          else
+            CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
+            AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
+          fi
+
+          # 2. Get IST Time and Calculate Day Progress
+          CURRENT_TIME=$(date +"%d %b %Y, %I:%M %p")
+          HOUR=$(date +%-H)
+          MIN=$(date +%-M)
+          TOTAL_MINS=$(( (HOUR * 60) + MIN ))
+          PERCENT=$(( (TOTAL_MINS * 100) / 1440 ))
+
+          # 3. Generate Progress Bar (10 blocks)
+          FILLED=$(( PERCENT / 10 ))
+          [[ $FILLED -gt 10 ]] && FILLED=10
+          EMPTY=$(( 10 - FILLED ))
+          
+          BAR_FILLED=$(printf '▓%.0s' $(seq 1 $FILLED 2>/dev/null))
+          BAR_EMPTY=$(printf '░%.0s' $(seq 1 $EMPTY 2>/dev/null))
+          BAR="${BAR_FILLED}${BAR_EMPTY}"
+
+          # 4. Construct Final Message
+          # %0A = Newline, %20 = Space, %25 = %
+          MESSAGE="✨ *Daily Motivation* ✨%0A%0A\"$CONTENT\"%0A— _$AUTHOR_%0A%0A🕒 *IST:* $CURRENT_TIME%0A📅 *Day Progress:* $PERCENT%25%0A$BAR"
+
+          # 5. Send via Telegram Bot API
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown"
