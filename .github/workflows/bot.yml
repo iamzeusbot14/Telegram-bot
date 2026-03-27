@@ -1,7 +1,8 @@
-name: Daily IST Motivation & Festivals
+name: Pro-Level Daily IST Motivation
 
 on:
   schedule:
+    # 02:30 UTC is 08:00 AM IST
     - cron: '30 2 * * *'
   workflow_dispatch: 
 
@@ -11,66 +12,74 @@ jobs:
     env:
       TZ: 'Asia/Kolkata'
     steps:
-      - name: Fetch Data and Send
+      - name: Execute Pro Workflow
         run: |
-          # 1. Fetch Festivals
+          # 1. Fetch Festivals (Indian Public Holidays)
           YEAR=$(date +%Y)
           DATE_ISO=$(date +%Y-%m-%d)
           HOLIDAY_DATA=$(curl -s -k -L "https://date.nager.at/api/v3/PublicHolidays/$YEAR/IN")
           FESTIVAL_NAME=$(echo $HOLIDAY_DATA | jq -r ".[] | select(.date == \"$DATE_ISO\") | .localName")
-
           WISH_MSG=""
-          if [[ -n "$FESTIVAL_NAME" ]] && [[ "$FESTIVAL_NAME" != "null" ]]; then
-            WISH_MSG="🎉 <b>Happy $FESTIVAL_NAME!</b> 🎉%0A%0A"
+          [[ -n "$FESTIVAL_NAME" && "$FESTIVAL_NAME" != "null" ]] && WISH_MSG="🎉 <b>Happy $FESTIVAL_NAME!</b> 🎉%0A%0A"
+
+          # 2. Fetch Motivation (With Retry Logic)
+          FETCH_SUCCESS=false
+          for i in {1..3}; do
+            QUOTE_DATA=$(curl -s -k -L --max-time 10 https://api.quotable.io/random?tags=inspirational)
+            if [[ -n "$QUOTE_DATA" && "$QUOTE_DATA" != "null" ]]; then
+              CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
+              AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
+              FETCH_SUCCESS=true && break
+            fi
+            sleep 5
+          done
+
+          if [ "$FETCH_SUCCESS" = false ]; then
+            CONTENT="The only way to do great work is to love what you do."
+            AUTHOR="Steve Jobs"
           fi
 
-          # 2. Fetch Quote
-          QUOTE_DATA=$(curl -s -k -L --max-time 10 https://api.quotable.io/random?tags=inspirational)
-          if [[ -n "$QUOTE_DATA" ]] && [[ "$QUOTE_DATA" != "null" ]]; then
-            CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
-            AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
-          else
-            QUOTE_DATA=$(curl -s -k -L --max-time 10 https://zenquotes.io/api/random)
-            CONTENT=$(echo $QUOTE_DATA | jq -r '.[0].q')
-            AUTHOR=$(echo $QUOTE_DATA | jq -r '.[0].a')
-          fi
-
-          # 3. HIGH PRECISION Progress Calculation
-          # 2:31 PM = 14:31. Total minutes passed = (14*60) + 31 = 871.
-          # (871 * 100) / 1440 = 60.48%
+          # 3. High-Precision Math & Time Detection
           H=$(date +%-H)
           M=$(date +%-M)
-          PASSED_MINS=$(( (H * 60) + M ))
-          DAY_PERCENT=$(( (PASSED_MINS * 100) / 1440 ))
+          DAY_NAME=$(date +%A)
+          TOTAL_MINS=$(( (H * 60) + M ))
+          DAY_PERCENT=$(( (TOTAL_MINS * 100 + 720) / 1440 ))
           
           # Year Progress
           DAY_OF_YEAR=$(date +%-j)
           [[ $(($YEAR % 4)) -eq 0 && ($(($YEAR % 100)) -ne 0 || $(($YEAR % 400)) -eq 0) ]] && DAYS_IN_YEAR=366 || DAYS_IN_YEAR=365
-          YEAR_PERCENT=$(( (DAY_OF_YEAR * 100) / DAYS_IN_YEAR ))
+          YEAR_PERCENT=$(( (DAY_OF_YEAR * 100 + (DAYS_IN_YEAR / 2)) / DAYS_IN_YEAR ))
 
-          # 4. Generate Progress Bar Function
+          # 4. Pro Features: Dynamic Greeting & Day Vibe
+          if [ $H -lt 12 ]; then GREET="Good Morning"; elif [ $H -lt 17 ]; then GREET="Good Afternoon"; else GREET="Good Evening"; fi
+          
+          case $DAY_NAME in
+            Monday) VIBE="Let's Crush the Week!" ;;
+            Friday) VIBE="Finish Strong, Weekend is near!" ;;
+            Saturday|Sunday) VIBE="Recharge and Conquer!" ;;
+            *) VIBE="Stay Focused, Stay Hungry!" ;;
+          esac
+
+          # 5. Progress Bars (10 Blocks)
           gen_bar() {
             local p=$1
-            # Adjust filled blocks to be more accurate (1 block per 10%)
-            local filled=$(( (p + 5) / 10 )) 
+            local filled=$(( (p + 5) / 10 ))
             [[ $filled -gt 10 ]] && filled=10
             local empty=$(( 10 - filled ))
-            BAR_F=$(printf '▓%.0s' $(seq 1 $filled 2>/dev/null))
-            BAR_E=$(printf '░%.0s' $(seq 1 $empty 2>/dev/null))
-            echo "${BAR_F}${BAR_E}"
+            printf '▓%.0s' $(seq 1 $filled 2>/dev/null)
+            printf '░%.0s' $(seq 1 $empty 2>/dev/null)
           }
-
           DAY_BAR=$(gen_bar $DAY_PERCENT)
           YEAR_BAR=$(gen_bar $YEAR_PERCENT)
 
-          # 5. Construct Final Message
+          # 6. Construct Pro Message
           CURRENT_TIME=$(date +"%I:%M %p")
           CURRENT_DATE=$(date +"%d %b %Y")
           
-          # We use <b> and <i> for HTML mode
-          MESSAGE="${WISH_MSG}<b>✨ Daily Motivation ✨</b>%0A%0A\"$CONTENT\"%0A— <i>$AUTHOR</i>%0A%0A📅 <b>Date:</b> $CURRENT_DATE%0A🕒 <b>IST:</b> $CURRENT_TIME%0A%0A🌅 <b>Day Progress:</b> $DAY_PERCENT%25%0A<code>$DAY_BAR</code>%0A%0A🗓️ <b>Year Progress:</b> $YEAR_PERCENT%25%0A<code>$YEAR_BAR</code>"
+          MESSAGE="${WISH_MSG}<b>⚡ $GREET, Z E U S! ⚡</b>%0A<i>$VIBE</i>%0A%0A\"$CONTENT\"%0A— <b>$AUTHOR</b>%0A%0A📅 <b>$CURRENT_DATE</b> | 🕒 <b>$CURRENT_TIME</b>%0A%0A🌅 <b>Day Progress:</b> $DAY_PERCENT%25%0A<code>$DAY_BAR</code>%0A🗓️ <b>Year Progress:</b> $YEAR_PERCENT%25%0A<code>$YEAR_BAR</code>%0A%0A👤 <i>Z E U S [iamdrzeus14@gmail.com]</i>"
 
-          # 6. Send via Telegram Bot API
+          # 7. Final Push
           curl -s -k -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$MESSAGE" \
