@@ -4,7 +4,7 @@ on:
   schedule:
     # 02:30 UTC is 08:00 AM IST (Kolkata)
     - cron: '30 2 * * *'
-  workflow_dispatch: # Allows manual trigger for testing
+  workflow_dispatch: 
 
 jobs:
   send_quote:
@@ -14,16 +14,24 @@ jobs:
     steps:
       - name: Fetch Quote and Send
         run: |
-          # 1. Fetch a random inspirational quote with a 10s timeout
-          QUOTE_DATA=$(curl -s --max-time 10 https://api.quotable.io/random?tags=inspirational)
+          # 1. Fetch quote with -k (insecure) to skip SSL issues and -L for redirects
+          # Try Quotable first
+          QUOTE_DATA=$(curl -s -k -L --max-time 10 https://api.quotable.io/random?tags=inspirational)
           
-          # Check if API returned data, otherwise use fallback
-          if [ -z "$QUOTE_DATA" ] || [ "$QUOTE_DATA" == "null" ]; then
-            CONTENT="The only way to do great work is to love what you do."
-            AUTHOR="Steve Jobs"
-          else
+          if [[ -n "$QUOTE_DATA" ]] && [[ "$QUOTE_DATA" != "null" ]]; then
             CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
             AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
+          else
+            # Try ZenQuotes as a backup if Quotable fails
+            QUOTE_DATA=$(curl -s -k -L --max-time 10 https://zenquotes.io/api/random)
+            CONTENT=$(echo $QUOTE_DATA | jq -r '.[0].q')
+            AUTHOR=$(echo $QUOTE_DATA | jq -r '.[0].a')
+          fi
+
+          # Final hardcoded fallback if both APIs fail
+          if [[ -z "$CONTENT" ]] || [[ "$CONTENT" == "null" ]]; then
+            CONTENT="The only way to do great work is to love what you do."
+            AUTHOR="Steve Jobs"
           fi
 
           # 2. Get IST Time and Calculate Day Progress
@@ -43,11 +51,10 @@ jobs:
           BAR="${BAR_FILLED}${BAR_EMPTY}"
 
           # 4. Construct Final Message
-          # %0A = Newline, %20 = Space, %25 = %
           MESSAGE="✨ *Daily Motivation* ✨%0A%0A\"$CONTENT\"%0A— _$AUTHOR_%0A%0A🕒 *IST:* $CURRENT_TIME%0A📅 *Day Progress:* $PERCENT%25%0A$BAR"
 
-          # 5. Send via Telegram Bot API
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          # 5. Send via Telegram Bot API using Secrets
+          curl -s -k -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$MESSAGE" \
             -d "parse_mode=Markdown"
