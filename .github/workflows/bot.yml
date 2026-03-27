@@ -1,85 +1,83 @@
-name: Pro-Level Daily IST Motivation
+name: Z E U S Omni-Bot Pro
 
 on:
   schedule:
-    # 02:30 UTC is 08:00 AM IST
-    - cron: '30 2 * * *'
+    - cron: '30 2 * * *'  # 08:00 AM IST (Morning)
+    - cron: '0 8 * * *'   # 01:30 PM IST (Afternoon)
+    - cron: '0 12 * * *'  # 05:30 PM IST (Evening)
+    - cron: '30 16 * * *' # 10:00 PM IST (Night)
   workflow_dispatch: 
 
 jobs:
-  send_quote:
+  send_update:
     runs-on: ubuntu-latest
     env:
       TZ: 'Asia/Kolkata'
     steps:
-      - name: Execute Pro Workflow
+      - name: System Pulse
         run: |
-          # 1. Fetch Festivals (Indian Public Holidays)
+          # 1. Festival Check
           YEAR=$(date +%Y)
           DATE_ISO=$(date +%Y-%m-%d)
           HOLIDAY_DATA=$(curl -s -k -L "https://date.nager.at/api/v3/PublicHolidays/$YEAR/IN")
-          FESTIVAL_NAME=$(echo $HOLIDAY_DATA | jq -r ".[] | select(.date == \"$DATE_ISO\") | .localName")
+          FESTIVAL=$(echo $HOLIDAY_DATA | jq -r ".[] | select(.date == \"$DATE_ISO\") | .localName")
           WISH_MSG=""
-          [[ -n "$FESTIVAL_NAME" && "$FESTIVAL_NAME" != "null" ]] && WISH_MSG="🎉 <b>Happy $FESTIVAL_NAME!</b> 🎉%0A%0A"
+          [[ -n "$FESTIVAL" && "$FESTIVAL" != "null" ]] && WISH_MSG="🎊 <b>Happy $FESTIVAL!</b> 🎊%0A%0A"
 
-          # 2. Fetch Motivation (With Retry Logic)
-          FETCH_SUCCESS=false
+          # 2. Quote Fetch (Reliability Loop)
           for i in {1..3}; do
-            QUOTE_DATA=$(curl -s -k -L --max-time 10 https://api.quotable.io/random?tags=inspirational)
-            if [[ -n "$QUOTE_DATA" && "$QUOTE_DATA" != "null" ]]; then
-              CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
-              AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
-              FETCH_SUCCESS=true && break
-            fi
-            sleep 5
+            QUOTE_RAW=$(curl -s -k -L --max-time 8 https://api.quotable.io/random?tags=inspirational)
+            [[ -n "$QUOTE_RAW" && "$QUOTE_RAW" != "null" ]] && break || sleep 2
           done
+          CONTENT=$(echo $QUOTE_RAW | jq -r '.content // "The best way to predict the future is to invent it."')
+          AUTHOR=$(echo $QUOTE_RAW | jq -r '.author // "Alan Kay"')
 
-          if [ "$FETCH_SUCCESS" = false ]; then
-            CONTENT="The only way to do great work is to love what you do."
-            AUTHOR="Steve Jobs"
+          # 3. Time-Based Logic (The "Pro" Switch)
+          H=$(date +%-H)
+          if [ $H -lt 11 ]; then
+            HEADER="✨ GOOD MORNING, Z E U S ✨"
+            STATUS="🌅 System Online | Fresh Start"
+            ACTION="Time to dominate the day."
+          elif [ $H -lt 16 ]; then
+            HEADER="🔥 GOOD AFTERNOON, Z E U S 🔥"
+            STATUS="☀️ Peak Performance | Keep Pushing"
+            ACTION="Don't stop until you're proud."
+          elif [ $H -lt 21 ]; then
+            HEADER="🌆 GOOD EVENING, Z E U S 🌆"
+            STATUS="🌙 Sunset Sync | Reviewing Progress"
+            ACTION="Reflect on today's wins."
+          else
+            HEADER="🌌 GOOD NIGHT, Z E U S 🌌"
+            STATUS="💤 Hibernation Mode | Sleep & Grow"
+            ACTION="Rest up for tomorrow's battle."
           fi
 
-          # 3. High-Precision Math & Time Detection
-          H=$(date +%-H)
-          M=$(date +%-M)
-          DAY_NAME=$(date +%A)
-          TOTAL_MINS=$(( (H * 60) + M ))
-          DAY_PERCENT=$(( (TOTAL_MINS * 100 + 720) / 1440 ))
+          # 4. Precision Progress Calculation
+          TOTAL_MINS=$(( ($(date +%-H) * 60) + $(date +%-M) ))
+          DAY_PERC=$(( (TOTAL_MINS * 100 + 720) / 1440 ))
           
-          # Year Progress
-          DAY_OF_YEAR=$(date +%-j)
-          [[ $(($YEAR % 4)) -eq 0 && ($(($YEAR % 100)) -ne 0 || $(($YEAR % 400)) -eq 0) ]] && DAYS_IN_YEAR=366 || DAYS_IN_YEAR=365
-          YEAR_PERCENT=$(( (DAY_OF_YEAR * 100 + (DAYS_IN_YEAR / 2)) / DAYS_IN_YEAR ))
+          D_O_Y=$(date +%-j)
+          [[ $(($YEAR % 4)) -eq 0 && ($(($YEAR % 100)) -ne 0 || $(($YEAR % 400)) -eq 0) ]] && D_I_Y=366 || D_I_Y=365
+          YEAR_PERC=$(( (D_O_Y * 100 + (D_I_Y / 2)) / D_I_Y ))
 
-          # 4. Pro Features: Dynamic Greeting & Day Vibe
-          if [ $H -lt 12 ]; then GREET="Good Morning"; elif [ $H -lt 17 ]; then GREET="Good Afternoon"; else GREET="Good Evening"; fi
-          
-          case $DAY_NAME in
-            Monday) VIBE="Let's Crush the Week!" ;;
-            Friday) VIBE="Finish Strong, Weekend is near!" ;;
-            Saturday|Sunday) VIBE="Recharge and Conquer!" ;;
-            *) VIBE="Stay Focused, Stay Hungry!" ;;
-          esac
-
-          # 5. Progress Bars (10 Blocks)
+          # 5. Visual Bars
           gen_bar() {
             local p=$1
             local filled=$(( (p + 5) / 10 ))
             [[ $filled -gt 10 ]] && filled=10
-            local empty=$(( 10 - filled ))
             printf '▓%.0s' $(seq 1 $filled 2>/dev/null)
-            printf '░%.0s' $(seq 1 $empty 2>/dev/null)
+            printf '░%.0s' $(seq 1 $((10 - filled)) 2>/dev/null)
           }
-          DAY_BAR=$(gen_bar $DAY_PERCENT)
-          YEAR_BAR=$(gen_bar $YEAR_PERCENT)
+          DAY_BAR=$(gen_bar $DAY_PERC)
+          YEAR_BAR=$(gen_bar $YEAR_PERC)
 
-          # 6. Construct Pro Message
-          CURRENT_TIME=$(date +"%I:%M %p")
-          CURRENT_DATE=$(date +"%d %b %Y")
+          # 6. Interactive Message Build
+          TIMESTAMP=$(date +"%I:%M %p")
+          DATESTAMP=$(date +"%d %b %Y")
           
-          MESSAGE="${WISH_MSG}<b>⚡ $GREET, Z E U S! ⚡</b>%0A<i>$VIBE</i>%0A%0A\"$CONTENT\"%0A— <b>$AUTHOR</b>%0A%0A📅 <b>$CURRENT_DATE</b> | 🕒 <b>$CURRENT_TIME</b>%0A%0A🌅 <b>Day Progress:</b> $DAY_PERCENT%25%0A<code>$DAY_BAR</code>%0A🗓️ <b>Year Progress:</b> $YEAR_PERCENT%25%0A<code>$YEAR_BAR</code>%0A%0A👤 <i>Z E U S [iamdrzeus14@gmail.com]</i>"
+          MESSAGE="${WISH_MSG}<b>$HEADER</b>%0A<i>$STATUS</i>%0A%0A\"$CONTENT\"%0A— <b>$AUTHOR</b>%0A%0A🎯 <b>Focus:</b> $ACTION%0A%0A📅 <b>$DATESTAMP</b> | 🕒 <b>$TIMESTAMP</b>%0A%0A⏳ <b>Day:</b> $DAY_PERC%25%0A<code>$DAY_BAR</code>%0A%0A🌍 <b>Year:</b> $YEAR_PERC%25%0A<code>$YEAR_BAR</code>%0A%0A🛠️ <b>Maintainer:</b> Z E U S"
 
-          # 7. Final Push
+          # 7. Push to Telegram
           curl -s -k -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$MESSAGE" \
