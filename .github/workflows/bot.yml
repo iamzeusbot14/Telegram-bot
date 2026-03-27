@@ -1,4 +1,4 @@
-name: Daily IST Motivation Bot
+name: Daily IST Motivation & Festivals
 
 on:
   schedule:
@@ -11,11 +11,21 @@ jobs:
     env:
       TZ: 'Asia/Kolkata'
     steps:
-      - name: Fetch Quote and Send
+      - name: Fetch Data and Send
         run: |
-          # 1. Fetch quote (same logic as before)
+          # 1. Fetch Festivals
+          YEAR=$(date +%Y)
+          DATE_ISO=$(date +%Y-%m-%d)
+          HOLIDAY_DATA=$(curl -s -k -L "https://date.nager.at/api/v3/PublicHolidays/$YEAR/IN")
+          FESTIVAL_NAME=$(echo $HOLIDAY_DATA | jq -r ".[] | select(.date == \"$DATE_ISO\") | .localName")
+
+          WISH_MSG=""
+          if [[ -n "$FESTIVAL_NAME" ]] && [[ "$FESTIVAL_NAME" != "null" ]]; then
+            WISH_MSG="🎉 <b>Happy $FESTIVAL_NAME!</b> 🎉%0A%0A"
+          fi
+
+          # 2. Fetch Quote
           QUOTE_DATA=$(curl -s -k -L --max-time 10 https://api.quotable.io/random?tags=inspirational)
-          
           if [[ -n "$QUOTE_DATA" ]] && [[ "$QUOTE_DATA" != "null" ]]; then
             CONTENT=$(echo $QUOTE_DATA | jq -r '.content')
             AUTHOR=$(echo $QUOTE_DATA | jq -r '.author')
@@ -25,31 +35,42 @@ jobs:
             AUTHOR=$(echo $QUOTE_DATA | jq -r '.[0].a')
           fi
 
-          if [[ -z "$CONTENT" ]] || [[ "$CONTENT" == "null" ]]; then
-            CONTENT="The only way to do great work is to love what you do."
-            AUTHOR="Steve Jobs"
-          fi
+          # 3. HIGH PRECISION Progress Calculation
+          # 2:31 PM = 14:31. Total minutes passed = (14*60) + 31 = 871.
+          # (871 * 100) / 1440 = 60.48%
+          H=$(date +%-H)
+          M=$(date +%-M)
+          PASSED_MINS=$(( (H * 60) + M ))
+          DAY_PERCENT=$(( (PASSED_MINS * 100) / 1440 ))
+          
+          # Year Progress
+          DAY_OF_YEAR=$(date +%-j)
+          [[ $(($YEAR % 4)) -eq 0 && ($(($YEAR % 100)) -ne 0 || $(($YEAR % 400)) -eq 0) ]] && DAYS_IN_YEAR=366 || DAYS_IN_YEAR=365
+          YEAR_PERCENT=$(( (DAY_OF_YEAR * 100) / DAYS_IN_YEAR ))
 
-          # 2. Get IST Time and Calculate Day Progress
-          CURRENT_TIME=$(date +"%d %b %Y, %I:%M %p")
-          HOUR=$(date +%-H)
-          MIN=$(date +%-M)
-          TOTAL_MINS=$(( (HOUR * 60) + MIN ))
-          PERCENT=$(( (TOTAL_MINS * 100) / 1440 ))
+          # 4. Generate Progress Bar Function
+          gen_bar() {
+            local p=$1
+            # Adjust filled blocks to be more accurate (1 block per 10%)
+            local filled=$(( (p + 5) / 10 )) 
+            [[ $filled -gt 10 ]] && filled=10
+            local empty=$(( 10 - filled ))
+            BAR_F=$(printf '▓%.0s' $(seq 1 $filled 2>/dev/null))
+            BAR_E=$(printf '░%.0s' $(seq 1 $empty 2>/dev/null))
+            echo "${BAR_F}${BAR_E}"
+          }
 
-          # 3. Generate Progress Bar
-          FILLED=$(( PERCENT / 10 ))
-          [[ $FILLED -gt 10 ]] && FILLED=10
-          EMPTY=$(( 10 - FILLED ))
-          BAR_FILLED=$(printf '▓%.0s' $(seq 1 $FILLED 2>/dev/null))
-          BAR_EMPTY=$(printf '░%.0s' $(seq 1 $EMPTY 2>/dev/null))
-          BAR="${BAR_FILLED}${BAR_EMPTY}"
+          DAY_BAR=$(gen_bar $DAY_PERCENT)
+          YEAR_BAR=$(gen_bar $YEAR_PERCENT)
 
-          # 4. Construct Message in HTML (much safer than Markdown)
-          # <b> = Bold, <i> = Italic
-          MESSAGE="<b>✨ Daily Motivation ✨</b>%0A%0A\"$CONTENT\"%0A— <i>$AUTHOR</i>%0A%0A🕒 <b>IST:</b> $CURRENT_TIME%0A📅 <b>Day Progress:</b> $PERCENT%25%0A<code>$BAR</code>"
+          # 5. Construct Final Message
+          CURRENT_TIME=$(date +"%I:%M %p")
+          CURRENT_DATE=$(date +"%d %b %Y")
+          
+          # We use <b> and <i> for HTML mode
+          MESSAGE="${WISH_MSG}<b>✨ Daily Motivation ✨</b>%0A%0A\"$CONTENT\"%0A— <i>$AUTHOR</i>%0A%0A📅 <b>Date:</b> $CURRENT_DATE%0A🕒 <b>IST:</b> $CURRENT_TIME%0A%0A🌅 <b>Day Progress:</b> $DAY_PERCENT%25%0A<code>$DAY_BAR</code>%0A%0A🗓️ <b>Year Progress:</b> $YEAR_PERCENT%25%0A<code>$YEAR_BAR</code>"
 
-          # 5. Send via Telegram Bot API using HTML parse_mode
+          # 6. Send via Telegram Bot API
           curl -s -k -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$MESSAGE" \
