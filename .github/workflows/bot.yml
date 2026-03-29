@@ -2,7 +2,7 @@ name: Z E U S Omni-Bot Pro
 
 on:
   schedule:
-    - cron: '30 2 * * *'  # 08:00 AM IST (Daily Sync)
+    - cron: '30 2 * * *'  # 08:00 AM IST (Daily Morning Sync)
   workflow_dispatch: 
 
 jobs:
@@ -44,19 +44,18 @@ jobs:
           # 3. Precision Year Progress Calculation
           YEAR=$(date +%Y)
           D_O_Y=$(date +%-j)
-          # Leap year check
           [[ $(($YEAR % 4)) -eq 0 && ($(($YEAR % 100)) -ne 0 || $(($YEAR % 400)) -eq 0) ]] && D_I_Y=366 || D_I_Y=365
           YEAR_PERC=$(( (D_O_Y * 100 + (D_I_Y / 2)) / D_I_Y ))
 
-          # 4. Visual Bar Generation (15 chars for clean dot-matrix look)
+          # 4. Visual Bar Generation (15 chars)
           filled=$(( (YEAR_PERC * 15) / 100 ))
           empty=$(( 15 - filled ))
           YEAR_BAR=$(printf '▓%.0s' $(seq 1 $filled 2>/dev/null))$(printf '░%.0s' $(seq 1 $empty 2>/dev/null))
 
-          # 5. Message Construction
+          # 5. Message Construction (Updated Header)
           DATESTAMP=$(date +"%d %b %Y")
           
-          MESSAGE="${WISH_MSG}✨ <b>SYSTEM UPDATE | Z E U S</b> ✨%0A%0A\"$CONTENT\"%0A— <b>$AUTHOR</b>%0A%0A📅 <b>$DATESTAMP</b>%0A%0A🌍 <b>Year Progress:</b> $YEAR_PERC%25%0A<code>$YEAR_BAR</code>%0A%0A🛠️ <b>Maintainer:</b> Z E U S"
+          MESSAGE="${WISH_MSG}✨ <b>GOOD MORNING, Z E U S</b> ✨%0A%0A\"$CONTENT\"%0A— <b>$AUTHOR</b>%0A%0A📅 <b>$DATESTAMP</b>%0A%0A🌍 <b>Year Progress:</b> $YEAR_PERC%25%0A<code>$YEAR_BAR</code>%0A%0A🛠️ <b>Maintainer:</b> Z E U S"
 
           # 6. Push to Telegram
           curl -s -k -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
